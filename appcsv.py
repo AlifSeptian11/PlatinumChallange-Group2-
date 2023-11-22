@@ -58,6 +58,20 @@ def cleansing(text):
     text = re.sub('((www\.[^\s]+)|(https?://[^\s]+)|(http?://[^\s]+))',' ',text) # menghilangkan URL
     text = re.sub('  +', ' ', text) # Remove extra spaces 
     return text
+
+#def clean_text(text):
+#    text = re.sub('@[^\text]+', ' ', text) #menghapus username twitter
+#    text = re.sub(r'(?:\@|http?\://|https?\://|www)\S+', '', text) #menghapus https dan http
+#    text = re.sub('<.*?>', ' ', text) #mengganti karakter html dengan tanda petik
+#    text = re.sub('[^a-zA-Z]', ' ', text) #mempertimbangkan huruf dan nama
+#    text = re.sub('\n',' ',text) #mengganti line baru dengan spasi
+#    text = text.lower() #mengubah ke huruf kecil
+#    text = re.sub(r'\b[a-zA-Z]\b', ' ', text) #menghapus single char
+#    text = ' '.join(text.split()) #memisahkan dan menggabungkan kata
+#    text = re.sub(r'pic.twitter.com.[\w]+', '', text)  #menghapus link picture
+#    text = re.sub('user',' ', text) #menghapus username
+#    text = re.sub('RT',' ', text) #menghapus RT simbol
+#    return text
    
 
 # membuat endpoint untuk text clean route text_processing.yml 
