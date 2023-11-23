@@ -41,9 +41,11 @@ swagger_config = {
     "specs_route": "/docs/"
 }
 
-conn = sqlite3.connect('C:/Users/Reza Fakhrurrozi/Binar Data Science/Gold Level Challenge/database_gold.db', check_same_thread = False)
-df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
+#database
+# conn = sqlite3.connect('C:/Users/Reza Fakhrurrozi/Binar Data Science/Gold Level Challenge/database_gold.db', check_same_thread = False)
+# df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
 
+#fungsi cleansing text
 def clean_text(text):
     text = re.sub('@[^\text]+', ' ', text) #menghapus username twitter
     text = re.sub(r'(?:\@|http?\://|https?\://|www)\S+', '', text) #menghapus https dan http
@@ -58,6 +60,8 @@ def clean_text(text):
     text = re.sub('RT',' ', text) #menghapus RT simbol
     return text
 
+#kamusalay
+df_kamusalay = pd.read_csv("DATA/new_kamusalay.csv", encoding='latin1', header=None, names=['kata salah', 'kata benar'])
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
 def alay_to_normal(text):
     for word in kamusalay:
@@ -68,29 +72,29 @@ def text_cleansing(text):
     text = alay_to_normal(text)
     return text
 
-@swag_from("docs/swagger_input.yml", methods=['POST'])
+@swag_from("docs/LSTMtext.yml", methods=['POST'])
 @app.route('/input_text', methods=['POST'])
 def text_processing():
     input_txt = str(request.form["input_teks"])
     output_txt = text_cleansing(input_txt)
 
-    conn.execute('create table if not exists input_teks (input_text varchar(255), output_text varchar(255))')
-    query_txt = 'INSERT INTO input_teks (input_text, output_text) values (?,?)'
-    val = (input_txt, output_txt)
-    conn.execute(query_txt, val)
-    conn.commit()
+    # conn.execute('create table if not exists input_teks (input_text varchar(255), output_text varchar(255))')
+    # query_txt = 'INSERT INTO input_teks (input_text, output_text) values (?,?)'
+    # val = (input_txt, output_txt)
+    # conn.execute(query_txt, val)
+    # conn.commit()
 
     return_txt = {"input":input_txt, "output": output_txt}
     return jsonify (return_txt)
 
-@swag_from("docs/swagger_upload.yml", methods=['POST'])
+@swag_from("docs/LSTMupload.yml", methods=['POST'])
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     file = request.files["upload_file"]
     df_csv = (pd.read_csv(file, encoding="cp1252"))
 
     df_csv['new_tweet'] = df_csv['Tweet'].apply(text_cleansing)
-    df_csv.to_sql("clean_tweet", con=conn, index=False, if_exists='append')
+    # df_csv.to_sql("clean_tweet", con=conn, index=False, if_exists='append')
     #conn.close()
 
     cleansing_tweet = df_csv.new_tweet.to_list()
