@@ -72,7 +72,16 @@ def cleansing(text):
 #    text = re.sub('user',' ', text) #menghapus username
 #    text = re.sub('RT',' ', text) #menghapus RT simbol
 #    return text
-   
+
+#kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
+#def alay_to_normal(text):
+#    for word in kamusalay:
+#        return ' '.join([kamusalay[word] if word in kamusalay else word for word in text.split(' ')])
+
+#def text_cleansing(text):
+#    text = clean_text(text)
+#    text = alay_to_normal(text)
+#    return text   
 
 # membuat endpoint untuk text clean route text_processing.yml 
 @swag_from("docs/text_processing.yml", methods = ['POST'])
