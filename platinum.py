@@ -40,6 +40,9 @@ swagger_config = {
     "specs_route": "/docs/"
 }
 
+conn = sqlite3.connect('C:/Users/Reza Fakhrurrozi/Binar Data Science/Gold Level Challenge/database_gold.db', check_same_thread = False)
+df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
+
 def clean_text(text):
     text = re.sub('@[^\text]+', ' ', text) #menghapus username twitter
     text = re.sub(r'(?:\@|http?\://|https?\://|www)\S+', '', text) #menghapus https dan http
