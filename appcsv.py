@@ -83,6 +83,21 @@ def cleansing(text):
 #    text = alay_to_normal(text)
 #    return text   
 
+#@swag_from("docs/swagger_input.yml", methods=['POST'])
+#@app.route('/input_text', methods=['POST'])
+#def text_processing():
+#    input_txt = str(request.form["input_teks"])
+#    output_txt = text_cleansing(input_txt)
+#
+#    conn.execute('create table if not exists input_teks (input_text varchar(255), output_text varchar(255))')
+#    query_txt = 'INSERT INTO input_teks (input_text, output_text) values (?,?)'
+#    val = (input_txt, output_txt)
+#    conn.execute(query_txt, val)
+#    conn.commit()
+#
+#    return_txt = {"input":input_txt, "output": output_txt}
+#    return jsonify (return_txt)
+
 # membuat endpoint untuk text clean route text_processing.yml 
 @swag_from("docs/text_processing.yml", methods = ['POST'])
 @app.route('/text_processing', methods=['POST'])
