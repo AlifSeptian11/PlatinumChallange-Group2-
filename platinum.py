@@ -56,7 +56,8 @@ def remove_punctuation(text):
     text = re.sub(r'‚Ä¶', '', text)
     return text
 
-conn = sq.connect('C:/Users/Reza Fakhrurrozi/Platinum Level/database_pl.db', check_same_thread = False)
+# database
+conn = sq.connect('C:/Users/Reza Fakhrurrozi/Documents/GitHub/PlatinumChallange-Group2-/database_pl.db', check_same_thread = False)
 df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
 
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
@@ -70,18 +71,7 @@ def text_cleansing(text):
     text = lowercase(text)
     return text
 
-@app.route('/', methods=['GET'])
-def hello_world():
-    json_response = {
-        'status_code': 200,
-        'description': "Monggo pinarak~",
-        'data': "Haloooo, pripun kabareee??",
-    }
-
-    response_data = jsonify(json_response)
-    return response_data
-
-@swag_from("docs/swagger_input.yml", methods=['POST'])
+@swag_from("docs/LSTMtext.yml", methods=['POST'])
 @app.route('/input_text', methods=['POST'])
 def text_processing():
     input_txt = str(request.form["input_teks"])
@@ -96,7 +86,7 @@ def text_processing():
     return_txt = {"input":input_txt, "output": output_txt}
     return jsonify (return_txt)
 
-@swag_from("docs/swagger_upload.yml", methods=['POST'])
+@swag_from("docs/LSTMupload.yml", methods=['POST'])
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     file = request.files["upload_file"]
@@ -111,7 +101,6 @@ def upload_file():
     return_file = {
         'output': cleansing_tweet}
     return jsonify(return_file)
-
 
 if __name__ == '__main__':
 	app.run(debug=True)

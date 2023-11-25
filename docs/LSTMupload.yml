@@ -1,11 +1,12 @@
 tags:
-  - name: Upload File
+  - name: Upload file
+del :
+  description: File yang akan diproses
 parameters:
-  - in: formData
-    name: file
-    required: True
+  - name: upload_file
+    in: formData
+    required: required
     type: file
-    description: upload file
 responses:
     '200':
       description: Successful response
