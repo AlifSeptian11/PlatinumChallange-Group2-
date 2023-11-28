@@ -2,6 +2,12 @@
 import pandas as pd
 import re
 import sqlite3 as sq
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+import nltk.stem as stemmer
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 from flask import Flask, jsonify, request
 from flasgger import Swagger, LazyString, LazyJSONEncoder, swag_from
 class CustomFlaskAppWithEncoder(Flask):
@@ -56,6 +62,25 @@ def remove_punctuation(text):
     text = re.sub(r'‚Ä¶', '', text)
     return text
 
+## menghilangkan kata-kata yang tidak penting
+#stopword_list = stopwords.words('indonesian')
+#stopword_list.extend(['yg', 'dg', 'rt', 'dgn', 'ny', 'd', 'klo',
+#                       'kalo', 'amp', 'biar', 'bikin', 'bilang',
+#                       'gak', 'ga', 'krn', 'nya', 'nih', 'sih',
+#                       'si', 'tau', 'tdk', 'tuh', 'utk', 'ya',
+#                       'jd', 'jgn', 'sdh', 'aja', 'n', 't',
+#                       'nyg', 'hehe', 'pen', 'u', 'nan', 'loh', 'rt',
+#                       '&amp', 'yah', 'dkk', 'xf', 'nku', 'url',
+#                       'xa', 'xaa' 'xi', 'xe'])
+#
+## convert list ke dictionary
+#stopword_list = set(stopword_list)
+#
+## remove stopwords pada list token
+#def stopwords_removal(text):
+#    text = [word for word in text if word not in stopword_list]
+#    return text
+
 # database
 conn = sq.connect('C:/Users/Reza Fakhrurrozi/Documents/GitHub/PlatinumChallange-Group2-/database_pl.db', check_same_thread = False)
 df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
@@ -69,6 +94,7 @@ def text_cleansing(text):
     text = remove_punctuation(text)
     text = alay_to_normal(text)
     text = lowercase(text)
+#    text = stopwords_removal(text)
     return text
 
 @swag_from("docs/LSTMtext.yml", methods=['POST'])
