@@ -82,7 +82,7 @@ def remove_punctuation(text):
 #    return text
 
 # database
-conn = sq.connect('C:/Users/Reza Fakhrurrozi/Documents/GitHub/PlatinumChallange-Group2-/database_pl.db', check_same_thread = False)
+conn = sq.connect('database_pl.db', check_same_thread = False)
 df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
 
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
@@ -120,6 +120,9 @@ def upload_file():
 
     df_csv['new_tweet'] = df_csv['Tweet'].apply(text_cleansing)
     df_csv.to_sql("clean_tweet", con=conn, index=False, if_exists='append')
+
+    result_file_path = '/output/clean_tweet.csv'
+    df_csv.to_csv(result_file_path, index=False, encoding='utf-8')
     #conn.close()
 
     cleansing_tweet = df_csv.new_tweet.to_list()
