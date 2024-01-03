@@ -1,15 +1,15 @@
 #import library
-import pandas as pd
-import re
-import sqlite3 as sq
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
-import nltk.stem as stemmer
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 from flask import Flask, jsonify, request
 from flasgger import Swagger, LazyString, LazyJSONEncoder, swag_from
+import pandas as pd
+import pickle, re
+import sqlite3 as sq
+import numpy as np
+from tensorflow import keras
+from keras.preprocessing.text import Tokenizer
+from keras.models import load_model
+from keras.preprocessing.sequence import pad_sequences
+
 class CustomFlaskAppWithEncoder(Flask):
     json_provider_class = LazyJSONEncoder
 
@@ -42,94 +42,238 @@ swagger_config = {
 }
 swagger = Swagger(app, template=swagger_template, config = swagger_config)
 
-def lowercase(text):
-    return text.lower()
+max_features = 5000
+tokenizer = Tokenizer(num_words=max_features, split=' ', lower=True)
+sentiment = ['negative', 'neutral', 'positive']
 
-def remove_punctuation(text):
-    text = re.sub(r'(?:\@|http?\://|https?\://|www)\S+', '', text) #menghapus https dan http
-    text = re.sub('<.*?>', ' ', text) #mengganti karakter html dengan tanda petik
-    text = re.sub('[^0-9a-zA-Z]+', ' ', text) #menghilangkan semua karakter yang bukan huruf atau angka dan menggantinya dengan spasi.
-    text = re.sub('\n',' ',text) #mengganti line baru dengan spasi
-    text = re.sub(r':', ' ', text) #menggantikan karakter : dengan spasi 
-    text = re.sub('gue','saya', text) # Mengganti kata "gue" dengan kata "saya"
-    text = re.sub(r'\b[a-zA-Z]\b', ' ', text) #menghapus single char
-    text = ' '.join(text.split()) #memisahkan dan menggabungkan kata
-    text = text.strip() #menghilangkan whitespace di awal dan di akhir teks
-    text = re.sub(r'pic.twitter.com.[\w]+', '', text) #menghapus link picture
-    text = re.sub(r'\buser\b',' ', text) #menghapus kata 'user'
-    text = re.sub(r'\brt\b',' ', text) #menghapus awalan rt
-    text = re.sub('RT',' ', text) #menghapus RT simbol
-    text = re.sub(r'‚Ä¶', '', text)
-    return text
+def lowercase(s):
+    return s.lower()
 
-## menghilangkan kata-kata yang tidak penting
-#stopword_list = stopwords.words('indonesian')
-#stopword_list.extend(['yg', 'dg', 'rt', 'dgn', 'ny', 'd', 'klo',
-#                       'kalo', 'amp', 'biar', 'bikin', 'bilang',
-#                       'gak', 'ga', 'krn', 'nya', 'nih', 'sih',
-#                       'si', 'tau', 'tdk', 'tuh', 'utk', 'ya',
-#                       'jd', 'jgn', 'sdh', 'aja', 'n', 't',
-#                       'nyg', 'hehe', 'pen', 'u', 'nan', 'loh', 'rt',
-#                       '&amp', 'yah', 'dkk', 'xf', 'nku', 'url',
-#                       'xa', 'xaa' 'xi', 'xe'])
-#
-## convert list ke dictionary
-#stopword_list = set(stopword_list)
-#
-## remove stopwords pada list token
-#def stopwords_removal(text):
-#    text = [word for word in text if word not in stopword_list]
-#    return text
+def punctuation(s):
+    s = re.sub(r'(?:\@|http?\://|https?\://|www)\S+', '', s) #menghapus https dan http
+    s = re.sub('<.*?>', ' ', s) #mengganti karakter html dengan tanda petik
+    s = re.sub('[^0-9a-zA-Z]+', ' ', s) #menghilangkan semua karakter yang bukan huruf atau angka dan menggantinya dengan spasi.
+    s = re.sub('\n',' ',s) #mengganti line baru dengan spasi
+    s = re.sub(r':', ' ', s) #menggantikan karakter : dengan spasi 
+    s = re.sub('gue','saya', s) # Mengganti kata "gue" dengan kata "saya"
+    s = re.sub(r'\b[a-zA-Z]\b', ' ', s) #menghapus single char
+    s = ' '.join(s.split()) #memisahkan dan menggabungkan kata
+    s = s.strip() #menghilangkan whitespace di awal dan di akhir teks
+    s = re.sub(r'pic.twitter.com.[\w]+', '', s) #menghapus link picture
+    s = re.sub(r'\buser\b',' ', s) #menghapus kata 'user'
+    s = re.sub(r'\brt\b',' ', s) #menghapus awalan rt
+    s = re.sub('RT',' ', s) #menghapus RT simbol
+    s = re.sub(r'‚Ä¶', '', s)
+    
+    return s
 
 # database
+def alay_to_normal(s):
+    for word in kamusalay:
+        return ' '.join([kamusalay[word] if word in kamusalay else word for word in s.split(' ')])
+    
+def cleansing(sent):
+    string = lowercase(sent)
+    string = punctuation(string)
+    string = alay_to_normal(string)
+
+    return string
+
 conn = sq.connect('database_pl.db', check_same_thread = False)
 df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
-
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
-def alay_to_normal(text):
-    for word in df_kamusalay:
-        return ' '.join([kamusalay[word] if word in kamusalay else word for word in text.split(' ')])
 
-def text_cleansing(text):
-    text = remove_punctuation(text)
-    text = alay_to_normal(text)
-    text = lowercase(text)
-#    text = stopwords_removal(text)
-    return text
+# load file sequences CNN
+file_CNN = open('CNN/x_pad_sequences.pickle', 'rb')
+feature_file_from_cnn = pickle.load(file_CNN)
+file_CNN.close()
 
-@swag_from("docs/LSTMtext.yml", methods=['POST'])
-@app.route('/input_text', methods=['POST'])
-def text_processing():
-    input_txt = str(request.form["input_teks"])
-    output_txt = text_cleansing(input_txt)
+model_file_from_cnn = load_model('CNN/model.h5')
 
-    conn.execute('create table if not exists input_teks (input_text varchar(255), output_text varchar(255))')
-    query_txt = 'INSERT INTO input_teks (input_text, output_text) values (?,?)'
-    val = (input_txt, output_txt)
-    conn.execute(query_txt, val)
-    conn.commit()
+# load file seuences RNN
+file_RNN = open('RNN/x_pad_sequences.pickle', 'rb')
+feature_file_from_rnn = pickle.load(file_RNN)
+file_RNN.close()
 
-    return_txt = {"input":input_txt, "output": output_txt}
-    return jsonify (return_txt)
+model_file_from_rnn = load_model('RNN/model.h5')
 
-@swag_from("docs/LSTMupload.yml", methods=['POST'])
-@app.route('/upload_file', methods=['POST'])
-def upload_file():
+#load file sequences LSTM
+file_LSTM = open('LSTM/x_pad_sequences.pickle', 'rb')
+feature_file_from_lstm = pickle.load(file_LSTM)
+file_LSTM.close()
+
+model_file_from_lstm = load_model('LSTM/model.h5')
+
+#endpoint CNNtext
+@swag_from("docs/CNNtext.yml", methods=['POST'])
+@app.route('/CNNtext', methods=['POST'])
+def CNNtext():
+    
+    original_text = request.form.get('text')
+
+    text = [cleansing(original_text)]
+
+    feature = tokenizer.texts_to_sequences(text)
+    seq = pad_sequences(feature, maxlen=feature_file_from_cnn.shape[1])
+
+    prediction = model_file_from_cnn.predict(seq)
+    get_sentiment = sentiment[np.argmax(prediction[0])]
+    
+    json_response = {
+        'status_code': 200,
+        'description': "Result of Sentiment Analysis Using CNN",
+        'data': {
+            'text': original_text,
+            'sentiment': get_sentiment
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
+
+#endpoint CNNfile
+@swag_from("docs/CNNfile.yml", methods=['POST'])
+@app.route('/CNNfile', methods=['POST'])
+def CNNfile():
     file = request.files["upload_file"]
-    df_csv = (pd.read_csv(file, encoding="cp1252"))
+    df = (pd.read_csv(file, encoding="cp1252"))
+    df = df.rename(columns={df.columns[0]: 'text'})
+    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
 
-    df_csv['new_tweet'] = df_csv['Tweet'].apply(text_cleansing)
-    df_csv.to_sql("clean_tweet", con=conn, index=False, if_exists='append')
+    result = []
 
-    result_file_path = '/output/clean_tweet.csv'
-    df_csv.to_csv(result_file_path, index=False, encoding='utf-8')
-    #conn.close()
+    for index, row in df.iterrows():
+        text = tokenizer.texts_to_sequences([(row['text_clean'])])
+        seq = pad_sequences(text, maxlen=feature_file_from_cnn.shape[1])
+        prediction = model_file_from_cnn.predict(seq)
+        get_sentiment = sentiment[np.argmax(prediction[0])]
+        result.append(get_sentiment)
+    
+    original = df.text_clean.to_list()
 
-    cleansing_tweet = df_csv.new_tweet.to_list()
+    json_response = {
+        'status_code' : 200,
+        'description' : "Result of Sentiment Analysis using CNN",
+        'data' : {
+            'text' : original,
+            'sentiment' : result
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
 
-    return_file = {
-        'output': cleansing_tweet}
-    return jsonify(return_file)
+#endpoint RNNtext
+@swag_from("docs/RNNtext.yml", methods=['POST'])
+@app.route('/RNNtext', methods=['POST'])
+def RNNtext():
+    
+    original_text = request.form.get('text')
+
+    text = [cleansing(original_text)]
+
+    feature = tokenizer.texts_to_sequences(text)
+    seq = pad_sequences(feature, maxlen=feature_file_from_rnn.shape[1])
+
+    prediction = model_file_from_rnn.predict(seq)
+    get_sentiment = sentiment[np.argmax(prediction[0])]
+    
+    json_response = {
+        'status_code': 200,
+        'description': "Result of Sentiment Analysis Using RNN",
+        'data': {
+            'text': original_text,
+            'sentiment': get_sentiment
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
+
+#endpoint RNNfile
+@swag_from("docs/RNNfile.yml", methods=['POST'])
+@app.route('/RNNfile', methods=['POST'])
+def RNNfile():
+    file = request.files["upload_file"]
+    df = (pd.read_csv(file, encoding="cp1252"))
+    df = df.rename(columns={df.columns[0]: 'text'})
+    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
+
+    result = []
+
+    for index, row in df.iterrows():
+        text = tokenizer.texts_to_sequences([(row['text_clean'])])
+        seq = pad_sequences(text, maxlen=feature_file_from_rnn.shape[1])
+        prediction = model_file_from_rnn.predict(seq)
+        get_sentiment = sentiment[np.argmax(prediction[0])]
+        result.append(get_sentiment)
+    
+    original = df.text_clean.to_list()
+
+    json_response = {
+        'status_code' : 200,
+        'description' : "Result of Sentiment Analysis using RNN",
+        'data' : {
+            'text' : original,
+            'sentiment' : result
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
+
+#endpoint LSTMtext
+@swag_from("docs/LSTMtext.yml", methods=['POST'])
+@app.route('/LSTMtext', methods=['POST'])
+def LSTMtext():
+    
+    original_text = request.form.get('text')
+
+    text = [cleansing(original_text)]
+
+    feature = tokenizer.texts_to_sequences(text)
+    seq = pad_sequences(feature, maxlen=feature_file_from_lstm.shape[1])
+
+    prediction = model_file_from_lstm.predict(seq)
+    get_sentiment = sentiment[np.argmax(prediction[0])]
+    
+    json_response = {
+        'status_code': 200,
+        'description': "Result of Sentiment Analysis Using LSTM",
+        'data': {
+            'text': original_text,
+            'sentiment': get_sentiment
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
+
+#endpoint LSTMfile
+@swag_from("docs/LSTMfile.yml", methods=['POST'])
+@app.route('/LSTMfile', methods=['POST'])
+def LSTMfile():
+    file = request.files["upload_file"]
+    df = (pd.read_csv(file, encoding="cp1252"))
+    df = df.rename(columns={df.columns[0]: 'text'})
+    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
+
+    result = []
+
+    for index, row in df.iterrows():
+        text = tokenizer.texts_to_sequences([(row['text_clean'])])
+        seq = pad_sequences(text, maxlen=feature_file_from_lstm.shape[1])
+        prediction = model_file_from_lstm.predict(seq)
+        get_sentiment = sentiment[np.argmax(prediction[0])]
+        result.append(get_sentiment)
+    
+    original = df.text_clean.to_list()
+
+    json_response = {
+        'status_code' : 200,
+        'description' : "Result of Sentiment Analysis using LSTM",
+        'data' : {
+            'text' : original,
+            'sentiment' : result
+        },
+    }
+    response_data = jsonify(json_response)
+    return response_data
 
 if __name__ == '__main__':
 	app.run(debug=True)
