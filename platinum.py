@@ -83,45 +83,35 @@ conn = sq.connect('database_pl.db', check_same_thread = False)
 df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
 
-# load file sequences CNN
-file_CNN = open('CNN/x_pad_sequences.pickle', 'rb')
-feature_file_from_cnn = pickle.load(file_CNN)
-file_CNN.close()
+# load hasil feature extraction dari Neural Network
+file = open("Neural Network/tfidf_vect.p",'rb')
+tfidf_vect = pickle.load(file)
+file.close()
 
-model_file_from_cnn = load_model('CNN/model.h5')
+model_file_from_nn = pickle.load(open('Neural Network/model_neuralnetwork.p', 'rb'))
 
-# load file seuences RNN
-file_RNN = open('RNN/x_pad_sequences.pickle', 'rb')
-feature_file_from_rnn = pickle.load(file_RNN)
-file_RNN.close()
-
-model_file_from_rnn = load_model('RNN/model.h5')
-
-#load file sequences LSTM
+# load file sequences LSTM
 file_LSTM = open('LSTM/x_pad_sequences.pickle', 'rb')
 feature_file_from_lstm = pickle.load(file_LSTM)
 file_LSTM.close()
 
 model_file_from_lstm = load_model('LSTM/model.h5')
 
-#endpoint CNNtext
-@swag_from("docs/CNNtext.yml", methods=['POST'])
-@app.route('/CNNtext', methods=['POST'])
-def CNNtext():
-    
+# endpoint NNtext
+@swag_from("docs/NNtext.yml", methods=['POST'])
+@app.route('/NNtext', methods=['POST'])
+def NNtext():
+
     original_text = request.form.get('text')
 
     text = [cleansing(original_text)]
 
-    feature = tokenizer.texts_to_sequences(text)
-    seq = pad_sequences(feature, maxlen=feature_file_from_cnn.shape[1])
+    text_feature = tfidf_vect.transform([text])
+    get_sentiment = model_file_from_nn.predict(text_feature)[0]
 
-    prediction = model_file_from_cnn.predict(seq)
-    get_sentiment = sentiment[np.argmax(prediction[0])]
-    
     json_response = {
         'status_code': 200,
-        'description': "Result of Sentiment Analysis Using CNN",
+        'description': "Result of Sentiment Analysis using CNN",
         'data': {
             'text': original_text,
             'sentiment': get_sentiment
@@ -130,95 +120,7 @@ def CNNtext():
     response_data = jsonify(json_response)
     return response_data
 
-#endpoint CNNfile
-@swag_from("docs/CNNfile.yml", methods=['POST'])
-@app.route('/CNNfile', methods=['POST'])
-def CNNfile():
-    file = request.files["upload_file"]
-    df = (pd.read_csv(file, encoding="cp1252"))
-    df = df.rename(columns={df.columns[0]: 'text'})
-    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
-
-    result = []
-
-    for index, row in df.iterrows():
-        text = tokenizer.texts_to_sequences([(row['text_clean'])])
-        seq = pad_sequences(text, maxlen=feature_file_from_cnn.shape[1])
-        prediction = model_file_from_cnn.predict(seq)
-        get_sentiment = sentiment[np.argmax(prediction[0])]
-        result.append(get_sentiment)
-    
-    original = df.text_clean.to_list()
-
-    json_response = {
-        'status_code' : 200,
-        'description' : "Result of Sentiment Analysis using CNN",
-        'data' : {
-            'text' : original,
-            'sentiment' : result
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
-
-#endpoint RNNtext
-@swag_from("docs/RNNtext.yml", methods=['POST'])
-@app.route('/RNNtext', methods=['POST'])
-def RNNtext():
-    
-    original_text = request.form.get('text')
-
-    text = [cleansing(original_text)]
-
-    feature = tokenizer.texts_to_sequences(text)
-    seq = pad_sequences(feature, maxlen=feature_file_from_rnn.shape[1])
-
-    prediction = model_file_from_rnn.predict(seq)
-    get_sentiment = sentiment[np.argmax(prediction[0])]
-    
-    json_response = {
-        'status_code': 200,
-        'description': "Result of Sentiment Analysis Using RNN",
-        'data': {
-            'text': original_text,
-            'sentiment': get_sentiment
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
-
-#endpoint RNNfile
-@swag_from("docs/RNNfile.yml", methods=['POST'])
-@app.route('/RNNfile', methods=['POST'])
-def RNNfile():
-    file = request.files["upload_file"]
-    df = (pd.read_csv(file, encoding="cp1252"))
-    df = df.rename(columns={df.columns[0]: 'text'})
-    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
-
-    result = []
-
-    for index, row in df.iterrows():
-        text = tokenizer.texts_to_sequences([(row['text_clean'])])
-        seq = pad_sequences(text, maxlen=feature_file_from_rnn.shape[1])
-        prediction = model_file_from_rnn.predict(seq)
-        get_sentiment = sentiment[np.argmax(prediction[0])]
-        result.append(get_sentiment)
-    
-    original = df.text_clean.to_list()
-
-    json_response = {
-        'status_code' : 200,
-        'description' : "Result of Sentiment Analysis using RNN",
-        'data' : {
-            'text' : original,
-            'sentiment' : result
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
-
-#endpoint LSTMtext
+# endpoint LSTMtext
 @swag_from("docs/LSTMtext.yml", methods=['POST'])
 @app.route('/LSTMtext', methods=['POST'])
 def LSTMtext():
@@ -244,7 +146,7 @@ def LSTMtext():
     response_data = jsonify(json_response)
     return response_data
 
-#endpoint LSTMfile
+# endpoint LSTMfile
 @swag_from("docs/LSTMfile.yml", methods=['POST'])
 @app.route('/LSTMfile', methods=['POST'])
 def LSTMfile():
