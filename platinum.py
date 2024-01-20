@@ -67,7 +67,6 @@ def punctuation(s):
     
     return s
 
-# database
 def alay_to_normal(s):
     for word in kamusalay:
         return ' '.join([kamusalay[word] if word in kamusalay else word for word in s.split(' ')])
@@ -97,6 +96,23 @@ file_LSTM.close()
 
 model_file_from_lstm = load_model('LSTM/model.h5')
 
+with open('LSTM/tokenizer.pickle', 'rb') as handle:
+    tokenizer = pickle.load(handle)
+
+sentiment_labels = ['negative', 'neutral', 'positive']
+
+def predict_sentiment(text):
+    cleaned_text = cleansing(text)
+    input_text = [cleaned_text]
+
+    predicted = tokenizer.texts_to_sequences(input_text)
+    guess = pad_sequences(predicted, maxlen=feature_file_from_lstm.shape[1])
+
+    prediction = model_file_from_lstm.predict(guess)[0]
+    sentiment_label = sentiment_labels[np.argmax(prediction)]
+
+    return sentiment_label
+
 # endpoint NNtext
 @swag_from("docs/NNtext.yml", methods=['POST'])
 @app.route('/NNtext', methods=['POST'])
@@ -104,10 +120,9 @@ def NNtext():
 
     original_text = request.form.get('text')
 
-    text = [cleansing(original_text)]
+    text = tfidf_vect.transform([cleansing(original_text)])
 
-    text_feature = tfidf_vect.transform([text])
-    get_sentiment = model_file_from_nn.predict(text_feature)[0]
+    get_sentiment = model_file_from_nn.predict(text)[0]
 
     json_response = {
         'status_code': 200,
@@ -129,10 +144,10 @@ def LSTMtext():
 
     text = [cleansing(original_text)]
 
-    feature = tokenizer.texts_to_sequences(text)
-    seq = pad_sequences(feature, maxlen=feature_file_from_lstm.shape[1])
+    predicted = tokenizer.texts_to_sequences(text)
+    guess = pad_sequences(predicted, maxlen=feature_file_from_lstm.shape[1])
 
-    prediction = model_file_from_lstm.predict(seq)
+    prediction = model_file_from_lstm.predict(guess)
     get_sentiment = sentiment[np.argmax(prediction[0])]
     
     json_response = {
@@ -152,30 +167,17 @@ def LSTMtext():
 def LSTMfile():
     file = request.files["upload_file"]
     df = (pd.read_csv(file, encoding="cp1252"))
-    df = df.rename(columns={df.columns[0]: 'text'})
-    df['text_clean'] = df.apply(lambda row: cleansing(row['text']), axis=1)
-
-    result = []
-
-    for index, row in df.iterrows():
-        text = tokenizer.texts_to_sequences([(row['text_clean'])])
-        seq = pad_sequences(text, maxlen=feature_file_from_lstm.shape[1])
-        prediction = model_file_from_lstm.predict(seq)
-        get_sentiment = sentiment[np.argmax(prediction[0])]
-        result.append(get_sentiment)
     
-    original = df.text_clean.to_list()
+    df['Tweet_Clean'] = df['Tweet'].apply(cleansing)
+    df['Sentiment'] = df['Tweet'].apply(predict_sentiment)
 
-    json_response = {
-        'status_code' : 200,
-        'description' : "Result of Sentiment Analysis using LSTM",
-        'data' : {
-            'text' : original,
-            'sentiment' : result
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
+    df.to_sql("Tweet_Clean", con=conn, index=False, if_exists='append')
+    conn.close()
 
+    sentiment = df[['Tweet_Clean', 'Sentiment']].to_list()
+    return_file = {
+        'output': sentiment}
+    return jsonify(return_file)
+    
 if __name__ == '__main__':
 	app.run(debug=True)
