@@ -83,25 +83,32 @@ df_kamusalay = pd.read_sql_query('SELECT * FROM kamusalay', conn)
 kamusalay = dict(zip(df_kamusalay['alay'], df_kamusalay['normal']))
 
 # load hasil feature extraction dari Neural Network
-file = open("Neural Network/tfidf_vect.p",'rb')
-tfidf_vect = pickle.load(file)
-file.close()
-
+file_NN = open("Neural Network/tfidf_vect.p",'rb')
+tfidf_vect = pickle.load(file_NN)
 model_file_from_nn = pickle.load(open('Neural Network/model_neuralnetwork.p', 'rb'))
+file_NN.close()
+
+def predict_sentiment_neural_network(text):
+    cleaned_text = cleansing(text)
+    input_text = [cleaned_text]
+
+    input_vector = tfidf_vect.transform(input_text)
+    sentiment_label = model_file_from_nn.predict(input_vector)[0]
+
+    return sentiment_label
 
 # load file sequences LSTM
 file_LSTM = open('LSTM/x_pad_sequences.pickle', 'rb')
 feature_file_from_lstm = pickle.load(file_LSTM)
-file_LSTM.close()
-
 model_file_from_lstm = load_model('LSTM/model.h5')
+file_LSTM.close()
 
 with open('LSTM/tokenizer.pickle', 'rb') as handle:
     tokenizer = pickle.load(handle)
 
 sentiment_labels = ['negative', 'neutral', 'positive']
 
-def predict_sentiment(text):
+def predict_sentiment_LSTM(text):
     cleaned_text = cleansing(text)
     input_text = [cleaned_text]
 
@@ -116,68 +123,58 @@ def predict_sentiment(text):
 # endpoint NNtext
 @swag_from("docs/NNtext.yml", methods=['POST'])
 @app.route('/NNtext', methods=['POST'])
-def NNtext():
+def NN_input_text():
+    input_txt = str(request.form["text"])
+    output_txt = cleansing(input_txt)
+    sentiment_label = predict_sentiment_neural_network(output_txt)
 
-    original_text = request.form.get('text')
+    return_txt = {"input":input_txt, "output": output_txt, "sentiment": sentiment_label}
+    return jsonify (return_txt)
 
-    text = tfidf_vect.transform([cleansing(original_text)])
+# endpoint NNfile
+@swag_from("docs/NNfile.yml", methods=['POST'])
+@app.route('/NNfile', methods=['POST'])
+def NN_upload_file():
+    file = request.files["upload_file"]
+    df = pd.read_csv(file, encoding=("latin-1"))
+    df['Tweet_Clean'] = df['Tweet'].apply(cleansing)
+    df['Sentiment'] = df['Tweet_Clean'].apply(predict_sentiment_neural_network)
 
-    get_sentiment = model_file_from_nn.predict(text)[0]
-
-    json_response = {
-        'status_code': 200,
-        'description': "Result of Sentiment Analysis using CNN",
-        'data': {
-            'text': original_text,
-            'sentiment': get_sentiment
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
+    sentiment_results = df[['Tweet_Clean', 'Sentiment']].to_dict(orient='records')
+    return jsonify({'sentiment_results': sentiment_results})
 
 # endpoint LSTMtext
 @swag_from("docs/LSTMtext.yml", methods=['POST'])
 @app.route('/LSTMtext', methods=['POST'])
-def LSTMtext():
-    
-    original_text = request.form.get('text')
+def LSTM_input_text():
+    input_txt = str(request.form["text"])
+    output_txt = cleansing(input_txt)
+    sentiment_label = predict_sentiment_LSTM(output_txt)
 
-    text = [cleansing(original_text)]
+    with sq.connect("database_pl.db") as conn:
+        conn.execute('create table if not exists input_teks (input_text TEXT, output_text TEXT, sentiment TEXT)')
+        query_txt = 'INSERT INTO input_teks(input_text, output_text, sentiment) values (?,?,?)'
+        val = (input_txt, output_txt, sentiment_label)
+        conn.execute(query_txt, val)
+        conn.commit()
 
-    predicted = tokenizer.texts_to_sequences(text)
-    guess = pad_sequences(predicted, maxlen=feature_file_from_lstm.shape[1])
-
-    prediction = model_file_from_lstm.predict(guess)
-    get_sentiment = sentiment[np.argmax(prediction[0])]
-    
-    json_response = {
-        'status_code': 200,
-        'description': "Result of Sentiment Analysis Using LSTM",
-        'data': {
-            'text': original_text,
-            'sentiment': get_sentiment
-        },
-    }
-    response_data = jsonify(json_response)
-    return response_data
+    return_txt = {"input":input_txt, "output": output_txt, "sentiment": sentiment_label}
+    return jsonify (return_txt)
 
 # endpoint LSTMfile
 @swag_from("docs/LSTMfile.yml", methods=['POST'])
 @app.route('/LSTMfile', methods=['POST'])
-def LSTMfile():
+def LSTM_upload_file():
     file = request.files["upload_file"]
-    df = (pd.read_csv(file, encoding="cp1252"))
-    
+    df = pd.read_csv(file, encoding="latin-1")
     df['Tweet_Clean'] = df['Tweet'].apply(cleansing)
-    df['Sentiment'] = df['Tweet'].apply(predict_sentiment)
+    df['Sentiment'] = df['Tweet_Clean'].apply(predict_sentiment_LSTM)
 
-    df.to_sql("Tweet_Clean", con=conn, index=False, if_exists='append')
-    conn.close()
+    with sq.connect("database_pl.db") as conn:
+        df.to_sql('Clean_Tweet', con=conn, index=False, if_exists='append')
 
-    sentiment = df[['Tweet_Clean', 'Sentiment']].to_list()
-    return_file = {
-        'output': sentiment}
-    return jsonify(return_file)
+    sentiment_results = df[['Tweet_Clean', 'Sentiment']].to_dict(orient='records')
+    return jsonify({'output': sentiment_results})
     
 if __name__ == '__main__':
 	app.run(debug=True)
