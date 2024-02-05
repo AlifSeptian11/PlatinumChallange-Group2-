@@ -5,7 +5,6 @@ import pandas as pd
 import pickle, re
 import sqlite3 as sq
 import numpy as np
-from tensorflow import keras
 from keras.preprocessing.text import Tokenizer
 from keras.models import load_model
 from keras.preprocessing.sequence import pad_sequences
@@ -169,9 +168,6 @@ def LSTM_upload_file():
     df = pd.read_csv(file, encoding="latin-1")
     df['Tweet_Clean'] = df['Tweet'].apply(cleansing)
     df['Sentiment'] = df['Tweet_Clean'].apply(predict_sentiment_LSTM)
-
-    with sq.connect("database_pl.db") as conn:
-        df.to_sql('Clean_Tweet', con=conn, index=False, if_exists='append')
 
     sentiment_results = df[['Tweet_Clean', 'Sentiment']].to_dict(orient='records')
     return jsonify({'output': sentiment_results})
